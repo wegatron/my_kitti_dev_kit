@@ -36,21 +36,21 @@ def bbox2vtk(data, attributes, vtk_file):
         x = 0.5 * data[i, 3]  # len, x
         h = data[i, 4]  # height, z
         y = 0.5 * data[i, 5]  # width, y
-        yaw = data[i, 6]
+        yaw = 0.5*math.pi - data[i, 6]
         q = Quaternion(axis=[0,0,1], angle=yaw)
-        v00 = q.rotate([-x, -y, -h])
-        v01 = q.rotate([-x, y, -h])
-        v02 = q.rotate([x, y, -h])
-        v03 = q.rotate([x, -y, -h])
-        points_data.InsertNextPoint(pos[0] + v00[0], pos[1] + v00[1], pos[2])
-        points_data.InsertNextPoint(pos[0] + v01[0], pos[1] + v01[1], pos[2])
-        points_data.InsertNextPoint(pos[0] + v02[0], pos[1] + v02[1], pos[2])
-        points_data.InsertNextPoint(pos[0] + v03[0], pos[1] + v03[1], pos[2])
+        tmp_pos0 = q.rotate([- x, - y, pos[2]])
+        tmp_pos1 = q.rotate([- x, + y, pos[2]])
+        tmp_pos2 = q.rotate([+ x, + y, pos[2]])
+        tmp_pos3 = q.rotate([+ x, - y, pos[2]])
+        points_data.InsertNextPoint(pos[0] + tmp_pos0[0], pos[1] + tmp_pos0[1], tmp_pos0[2])
+        points_data.InsertNextPoint(pos[0] + tmp_pos1[0], pos[1] + tmp_pos1[1], tmp_pos1[2])
+        points_data.InsertNextPoint(pos[0] + tmp_pos2[0], pos[1] + tmp_pos2[1], tmp_pos2[2])
+        points_data.InsertNextPoint(pos[0] + tmp_pos3[0], pos[1] + tmp_pos3[1], tmp_pos3[2])
 
-        points_data.InsertNextPoint(pos[0] + v00[0], pos[1] + v00[1], pos[2]+h)
-        points_data.InsertNextPoint(pos[0] + v01[0], pos[1] + v01[1], pos[2]+h)
-        points_data.InsertNextPoint(pos[0] + v02[0], pos[1] + v02[1], pos[2]+h)
-        points_data.InsertNextPoint(pos[0] + v03[0], pos[1] + v03[1], pos[2]+h)
+        points_data.InsertNextPoint(pos[0] + tmp_pos0[0], pos[1] + tmp_pos0[1], tmp_pos0[2]+h)
+        points_data.InsertNextPoint(pos[0] + tmp_pos1[0], pos[1] + tmp_pos1[1], tmp_pos1[2]+h)
+        points_data.InsertNextPoint(pos[0] + tmp_pos2[0], pos[1] + tmp_pos2[1], tmp_pos2[2]+h)
+        points_data.InsertNextPoint(pos[0] + tmp_pos3[0], pos[1] + tmp_pos3[1], tmp_pos3[2]+h)
         off = i*8
         cells.InsertNextCell(5, [off + 0, off + 1, off + 2, off + 3, off + 0])
         cells.InsertNextCell(5, [off + 4, off + 5, off + 6, off + 7, off + 4])
@@ -268,14 +268,7 @@ def velodynepts2vtk(pt_data, vtk_path):
     points2vtk(pt_data, attribuits, vtk_path)
 
 
-if __name__ == '__main__':
-    pt_data = read_velodyne_bin('/home/wegatron/data_set_kitti/kitti_object/training/velodyne/000001.bin')
-    velodynepts2vtk(pt_data, '/home/wegatron/tmp/test.vtk')
-
-    # load gth labels
-    calib_info = get_calib('/home/wegatron/data_set_kitti/kitti_object/training/calib/000001.txt')
-    anno = get_label_anno('/home/wegatron/data_set_kitti/kitti_object/training/label_2/000001.txt')
-
+def anno2vtk(calib_info, anno, vtk_path):
     num_anno = anno['index'].shape[0]
     num_anno_valid = np.sum(anno['index'] != -1)
     oritented_bbox_data = np.empty([num_anno_valid, 7])  # center x,y,z, h, w, length, yaw(-pi, pi)
@@ -292,4 +285,18 @@ if __name__ == '__main__':
         oritented_bbox_data[valid_id, 3:6] = anno['dimensions'][i, :]
         oritented_bbox_data[valid_id, 6] = anno['rotation_y'][i]
         valid_id = valid_id + 1
-    bbox2vtk(oritented_bbox_data, {}, '/home/wegatron/tmp/bbox.vtk')
+    bbox2vtk(oritented_bbox_data, {}, vtk_path)
+
+
+if __name__ == '__main__':
+    data_set_dir = '/home/wegatron/data_set_kitti/kitti_object/training/'
+    output_dir = '/home/wegatron/tmp/'
+    for i in range(10):
+        pt_data = read_velodyne_bin(data_set_dir + 'velodyne/'+ str(i).zfill(6)+'.bin')
+        velodynepts2vtk(pt_data, output_dir + 'pts_' +str(i).zfill(6) + '.vtk')
+
+        # load gth labels
+        calib_info = get_calib(data_set_dir + 'calib/'+str(i).zfill(6)+'.txt')
+        anno = get_label_anno(data_set_dir + 'label_2/'+str(i).zfill(6)+'.txt')
+        anno2vtk(calib_info, anno, output_dir + 'anno_box_' + str(i).zfill(6) + '.vtk')
+
