@@ -32,6 +32,7 @@ def bbox2vtk(data, attributes, vtk_file):
     num_cells = data.shape[0]
     for i in range(num_cells):
         pos = data[i, 0:3]
+        print('pos:', pos)
         x = 0.5 * data[i, 3]  # len, x
         h = data[i, 4]  # height, z
         y = 0.5 * data[i, 5]  # width, y
@@ -50,12 +51,13 @@ def bbox2vtk(data, attributes, vtk_file):
         points_data.InsertNextPoint(pos[0] + v01[0], pos[1] + v01[1], pos[2]+h)
         points_data.InsertNextPoint(pos[0] + v02[0], pos[1] + v02[1], pos[2]+h)
         points_data.InsertNextPoint(pos[0] + v03[0], pos[1] + v03[1], pos[2]+h)
-        cells.InsertNextCell(5, [0, 1, 2, 3, 0])
-        cells.InsertNextCell(5, [4, 5, 6, 7, 4])
-        cells.InsertNextCell(2, [0, 4])
-        cells.InsertNextCell(2, [1, 5])
-        cells.InsertNextCell(2, [2, 6])
-        cells.InsertNextCell(2, [3, 7])
+        off = i*8
+        cells.InsertNextCell(5, [off + 0, off + 1, off + 2, off + 3, off + 0])
+        cells.InsertNextCell(5, [off + 4, off + 5, off + 6, off + 7, off + 4])
+        cells.InsertNextCell(2, [off + 0, off + 4])
+        cells.InsertNextCell(2, [off + 1, off + 5])
+        cells.InsertNextCell(2, [off + 2, off + 6])
+        cells.InsertNextCell(2, [off + 3, off + 7])
     bx_attrs = []
     for attr in attributes:
         if attr[1] == 'int1':
@@ -275,14 +277,19 @@ if __name__ == '__main__':
     anno = get_label_anno('/home/wegatron/data_set_kitti/kitti_object/training/label_2/000001.txt')
 
     num_anno = anno['index'].shape[0]
-    oritented_bbox_data = np.empty([num_anno, 7])  # center x,y,z, h, w, length, yaw(-pi, pi)
+    num_anno_valid = np.sum(anno['index'] != -1)
+    oritented_bbox_data = np.empty([num_anno_valid, 7])  # center x,y,z, h, w, length, yaw(-pi, pi)
     Tr_velo_to_cam = calib_info['calib/Tr_velo_to_cam']
+    valid_id = 0
     for i in range(num_anno):
+        if anno['index'][i] == -1:
+            continue
         xyz_camera = anno['location'][i, :]   # need to transform to velodyne coordinate
         Rt = np.asmatrix(Tr_velo_to_cam[0:3, 0:3]).getH()
         t = Tr_velo_to_cam[0:3, 3].reshape(-1)
         pos = Rt * xyz_camera.reshape([3, 1]) - Rt * t.reshape([3, 1])
-        oritented_bbox_data[i, 0:3] = pos.reshape(-1)
-        oritented_bbox_data[i, 3:6] = anno['dimensions'][i, :]
-        oritented_bbox_data[i, 6] = anno['rotation_y'][i]
+        oritented_bbox_data[valid_id, 0:3] = pos.reshape(-1)
+        oritented_bbox_data[valid_id, 3:6] = anno['dimensions'][i, :]
+        oritented_bbox_data[valid_id, 6] = anno['rotation_y'][i]
+        valid_id = valid_id + 1
     bbox2vtk(oritented_bbox_data, {}, '/home/wegatron/tmp/bbox.vtk')
