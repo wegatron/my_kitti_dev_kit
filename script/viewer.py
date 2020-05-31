@@ -22,7 +22,7 @@ def read_velodyne_bin(path):
         content = f.read()
         pc_iter = struct.iter_unpack('ffff', content)
         for idx, point in enumerate(pc_iter):
-            pc_list.append([point[0], point[1], point[2]])
+            pc_list.append([point[0], point[1], point[2], point[3]])
     return np.asarray(pc_list, dtype=np.float32)
 
 
@@ -31,24 +31,25 @@ def bbox2vtk(data, attributes, vtk_file):
     cells = vtk.vtkCellArray()
     num_cells = data.shape[0]
     for i in range(num_cells):
+        pos = data[i, 0:3]
         x = 0.5 * data[i, 3]  # len, x
-        y = 0.5 * data[i, 4]  # width, y
-        h = 0.5 * data[i, 5]  # height
+        h = data[i, 4]  # height, z
+        y = 0.5 * data[i, 5]  # width, y
         yaw = data[i, 6]
         q = Quaternion(axis=[0,0,1], angle=yaw)
         v00 = q.rotate([-x, -y, -h])
         v01 = q.rotate([-x, y, -h])
         v02 = q.rotate([x, y, -h])
         v03 = q.rotate([x, -y, -h])
-        points_data.InsertNextPoint(v00[0], v00[1], -h)
-        points_data.InsertNextPoint(v01[0], v01[1], -h)
-        points_data.InsertNextPoint(v02[0], v02[1], -h)
-        points_data.InsertNextPoint(v03[0], v03[1], -h)
+        points_data.InsertNextPoint(pos[0] + v00[0], pos[1] + v00[1], pos[2])
+        points_data.InsertNextPoint(pos[0] + v01[0], pos[1] + v01[1], pos[2])
+        points_data.InsertNextPoint(pos[0] + v02[0], pos[1] + v02[1], pos[2])
+        points_data.InsertNextPoint(pos[0] + v03[0], pos[1] + v03[1], pos[2])
 
-        points_data.InsertNextPoint(v00[0], v00[1], h)
-        points_data.InsertNextPoint(v01[0], v01[1], h)
-        points_data.InsertNextPoint(v02[0], v02[1], h)
-        points_data.InsertNextPoint(v03[0], v03[1], h)
+        points_data.InsertNextPoint(pos[0] + v00[0], pos[1] + v00[1], pos[2]+h)
+        points_data.InsertNextPoint(pos[0] + v01[0], pos[1] + v01[1], pos[2]+h)
+        points_data.InsertNextPoint(pos[0] + v02[0], pos[1] + v02[1], pos[2]+h)
+        points_data.InsertNextPoint(pos[0] + v03[0], pos[1] + v03[1], pos[2]+h)
         cells.InsertNextCell(5, [0, 1, 2, 3, 0])
         cells.InsertNextCell(5, [4, 5, 6, 7, 4])
         cells.InsertNextCell(2, [0, 4])
@@ -252,38 +253,36 @@ def get_label_anno(label_path):
     return annotations
 
 
-if __name__ == '__main__':
-    pt_data = read_velodyne_bin('/home/wegatron/data_set_kitti/kitti_object/train/velodyne/000000.bin')
-    # # pc = o3d.geometry.PointCloud()
-    # # pc.points = o3d.utility.Vector3dVector(pt_data)
-    # # open3d.geometry.OrientedBoundingBox()
-    # # o3d.visualization.draw_geometries_with_editing([pc])
-    # attribuits = []
-    # num_pts = pt_data.shape[0]
+def velodynepts2vtk(pt_data, vtk_path):
+    attribuits = []
+    num_pts = pt_data.shape[0]
     # vcolor = np.empty([num_pts, 3], dtype=np.uint8) # rgb
-    # vvals = np.empty([num_pts], dtype=float)
-    # for i in range(num_pts):
+    intensity = np.empty([num_pts], dtype=np.float)
+    for i in range(num_pts):
+        intensity[i] = pt_data[i, 3]
     #     vcolor[i] = [(i%255)/255.0, (255-i%255)/255.0, 0]
-    #     vvals[i] = i
     # attribuits.append(('colorRGB', 'uchar3', vcolor))
-    # attribuits.append(('vals', 'float1', vvals))
-    points2vtk(pt_data, [], '/home/wegatron/tmp/test.vtk')
+    attribuits.append(('intensity', 'float1', intensity))
+    points2vtk(pt_data, attribuits, vtk_path)
+
+
+if __name__ == '__main__':
+    pt_data = read_velodyne_bin('/home/wegatron/data_set_kitti/kitti_object/training/velodyne/000001.bin')
+    velodynepts2vtk(pt_data, '/home/wegatron/tmp/test.vtk')
 
     # load gth labels
-    calib_info = get_calib('/home/wegatron/data_set_kitti/kitti_object/training/calib/000000.txt')
+    calib_info = get_calib('/home/wegatron/data_set_kitti/kitti_object/training/calib/000001.txt')
+    anno = get_label_anno('/home/wegatron/data_set_kitti/kitti_object/training/label_2/000001.txt')
 
-
-    # oritented_bbox_data = np.empty([1, 7]) # center x,y,z, h, w, length, yaw(-pi, pi)
-    # oritented_bbox_data[0, 0] = 0
-    # oritented_bbox_data[0, 1] = 0
-    # oritented_bbox_data[0, 2] = 0
-    # oritented_bbox_data[0, 3] = 1
-    # oritented_bbox_data[0, 4] = 2
-    # oritented_bbox_data[0, 5] = 3
-    # oritented_bbox_data[0, 6] = math.pi/2
-    #
-    # scores = np.empty([1])
-    # scores[0] = 8.0
-    # attribuits = []
-    # attribuits.append(('score', 'float1', scores))
-    # bbox2vtk(oritented_bbox_data, attribuits, '/home/wegatron/tmp/bbox.vtk')
+    num_anno = anno['index'].shape[0]
+    oritented_bbox_data = np.empty([num_anno, 7])  # center x,y,z, h, w, length, yaw(-pi, pi)
+    Tr_velo_to_cam = calib_info['calib/Tr_velo_to_cam']
+    for i in range(num_anno):
+        xyz_camera = anno['location'][i, :]   # need to transform to velodyne coordinate
+        Rt = np.asmatrix(Tr_velo_to_cam[0:3, 0:3]).getH()
+        t = Tr_velo_to_cam[0:3, 3].reshape(-1)
+        pos = Rt * xyz_camera.reshape([3, 1]) - Rt * t.reshape([3, 1])
+        oritented_bbox_data[i, 0:3] = pos.reshape(-1)
+        oritented_bbox_data[i, 3:6] = anno['dimensions'][i, :]
+        oritented_bbox_data[i, 6] = anno['rotation_y'][i]
+    bbox2vtk(oritented_bbox_data, {}, '/home/wegatron/tmp/bbox.vtk')
