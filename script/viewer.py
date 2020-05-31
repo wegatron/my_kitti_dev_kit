@@ -273,6 +273,7 @@ def anno2vtk(calib_info, anno, vtk_path):
     num_anno_valid = np.sum(anno['index'] != -1)
     oritented_bbox_data = np.empty([num_anno_valid, 7])  # center x,y,z, h, w, length, yaw(-pi, pi)
     Tr_velo_to_cam = calib_info['calib/Tr_velo_to_cam']
+    obj_types = np.empty([num_anno_valid], dtype=np.int)
     valid_id = 0
     for i in range(num_anno):
         if anno['index'][i] == -1:
@@ -284,8 +285,17 @@ def anno2vtk(calib_info, anno, vtk_path):
         oritented_bbox_data[valid_id, 0:3] = pos.reshape(-1)
         oritented_bbox_data[valid_id, 3:6] = anno['dimensions'][i, :]
         oritented_bbox_data[valid_id, 6] = anno['rotation_y'][i]
+
+        if anno['name'][i] == 'Car':
+            obj_types[valid_id] = 1
+        elif anno['name'][i] == 'Pedestrian':
+            obj_types[valid_id] = 2
+        elif anno['name'][i] == 'Cyclist':
+            obj_types[valid_id] = 3
+        else:
+            obj_types[valid_id] = 0
         valid_id = valid_id + 1
-    bbox2vtk(oritented_bbox_data, {}, vtk_path)
+    bbox2vtk(oritented_bbox_data, [('obj_type', 'int1', obj_types)], vtk_path)
 
 
 if __name__ == '__main__':
