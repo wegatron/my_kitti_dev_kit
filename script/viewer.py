@@ -210,6 +210,16 @@ def get_calib(calib_path):
     image_info['calib/Tr_imu_to_velo'] = Tr_imu_to_velo
     return image_info
 
+def load_sematic_label(label_path):
+    '''
+    load sematic label format see sematic_kitti(http://semantic-kitti.org/dataset.html#format)
+    '''
+    label = np.fromfile(label_path, dtype=np.int32)
+    label = label.reshape((-1))
+    sem_label = label & 0xFFFF  # semantic label in lower half
+    inst_label = label >> 16  # instance id in upper half
+    return [sem_label, inst_label]
+
 
 def get_label_anno(label_path):
     annotations = {}
@@ -255,7 +265,7 @@ def get_label_anno(label_path):
     return annotations
 
 
-def velodynepts2vtk(pt_data, vtk_path):
+def velodynepts2vtk(pt_data, vtk_path, sematic_attr=None):
     attribuits = []
     num_pts = pt_data.shape[0]
     # vcolor = np.empty([num_pts, 3], dtype=np.uint8) # rgb
@@ -265,6 +275,8 @@ def velodynepts2vtk(pt_data, vtk_path):
     #     vcolor[i] = [(i%255)/255.0, (255-i%255)/255.0, 0]
     # attribuits.append(('colorRGB', 'uchar3', vcolor))
     attribuits.append(('intensity', 'float1', intensity))
+    if sematic_attr != None:
+        attribuits.extend(sematic_attr)
     points2vtk(pt_data, attribuits, vtk_path)
 
 
@@ -299,14 +311,18 @@ def anno2vtk(calib_info, anno, vtk_path):
 
 
 if __name__ == '__main__':
-    data_set_dir = '/home/wegatron/data_set_kitti/kitti_object/training/'
+    data_set_dir = '/home/wegatron/data_set/kitti/odometry/dataset'
     output_dir = '/home/wegatron/tmp/'
-    for i in range(10):
-        pt_data = read_velodyne_bin(data_set_dir + 'velodyne/'+ str(i).zfill(6)+'.bin')
-        velodynepts2vtk(pt_data, output_dir + 'pts_' +str(i).zfill(6) + '.vtk')
+    for i in range(100):
+        pt_data = read_velodyne_bin(data_set_dir + '/sequences/00/velodyne/'+ str(i).zfill(6)+'.bin')
 
-        # load gth labels
-        calib_info = get_calib(data_set_dir + 'calib/'+str(i).zfill(6)+'.txt')
-        anno = get_label_anno(data_set_dir + 'label_2/'+str(i).zfill(6)+'.txt')
-        anno2vtk(calib_info, anno, output_dir + 'anno_box_' + str(i).zfill(6) + '.vtk')
+        # ground truth
+        [sem_label, instance_id] = load_sematic_label(data_set_dir+'/sequences/00/labels/'+str(i).zfill(6)+'.label')
+        velodynepts2vtk(pt_data, output_dir + 'pts_' +str(i).zfill(6) + '.vtk',
+                        [('sem_label', 'int1', sem_label), ('instance_id', 'int1', instance_id)])
+
+        # load object detection gth labels
+        # calib_info = get_calib(data_set_dir + 'calib/'+str(i).zfill(6)+'.txt')
+        # anno = get_label_anno(data_set_dir + 'label_2/'+str(i).zfill(6)+'.txt')
+        # anno2vtk(calib_info, anno, output_dir + 'anno_box_' + str(i).zfill(6) + '.vtk')
 
